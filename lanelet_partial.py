@@ -50,3 +50,53 @@ for lanelet in full_map.laneletLayer:
 
 # Save the partial map
 write("path_to_partial_map.osm", submap, AttributeMap())
+
+
+from xml.etree import ElementTree as ET
+
+# Load the XML file
+file_path = '/mnt/data/lanelet2_map.osm'
+tree = ET.parse(file_path)
+root = tree.getroot()
+
+# List of subtype values for relation elements to remove
+subtypes_to_remove = {'road_marking', 'no_stopping_area'}
+
+# Track IDs of ways and nodes to remove
+ways_to_remove = set()
+nodes_to_remove = set()
+
+# Collect relations that need to be removed based on subtype
+relations_to_remove = []
+for relation in root.findall('relation'):
+    for tag in relation.findall('tag'):
+        if tag.get('k') == 'subtype' and tag.get('v') in subtypes_to_remove:
+            relations_to_remove.append(relation)
+            # Collect way IDs from these relations
+            for member in relation.findall('member'):
+                if member.get('type') == 'way':
+                    ways_to_remove.add(member.get('ref'))
+
+# Collect node IDs from the ways to be removed
+for way in root.findall('way'):
+    if way.get('id') in ways_to_remove:
+        for nd in way.findall('nd'):
+            nodes_to_remove.add(nd.get('ref'))
+
+# Remove the collected relations, ways, and nodes
+for relation in relations_to_remove:
+    root.remove(relation)
+
+for way in root.findall('way'):
+    if way.get('id') in ways_to_remove:
+        root.remove(way)
+
+for node in root.findall('node'):
+    if node.get('id') in nodes_to_remove:
+        root.remove(node)
+
+# Save the modified XML to a new file
+new_file_path = '/mnt/data/filtered_lanelet2_map.osm'
+tree.write(new_file_path)
+
+new_file_path
