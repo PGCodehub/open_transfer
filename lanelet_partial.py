@@ -100,3 +100,62 @@ new_file_path = '/mnt/data/filtered_lanelet2_map.osm'
 tree.write(new_file_path)
 
 new_file_path
+
+
+from xml.etree import ElementTree as ET
+
+def remove_elements(xml_path, subtypes_to_remove):
+    # Load the XML file
+    tree = ET.parse(xml_path)
+    root = tree.getroot()
+
+    # To keep track of all IDs to remove
+    relations_to_remove = set()
+    ways_to_remove = set()
+    nodes_to_remove = set()
+
+    # First pass: find all relations that need to be removed based on subtype
+    for relation in root.findall('relation'):
+        for tag in relation.findall('tag'):
+            if tag.get('k') == 'subtype' and tag.get('v') in subtypes_to_remove:
+                relations_to_remove.add(relation.get('id'))
+                for member in relation.findall('member'):
+                    if member.get('type') == 'way':
+                        ways_to_remove.add(member.get('ref'))
+                    elif member.get('type') == 'relation':
+                        relations_to_remove.add(member.get('ref'))
+
+    # Collect node IDs from the ways to be removed
+    for way in root.findall('way'):
+        if way.get('id') in ways_to_remove:
+            for nd in way.findall('nd'):
+                nodes_to_remove.add(nd.get('ref'))
+
+    # Second pass: adjust for nested relations
+    for relation in root.findall('relation'):
+        for member in relation.findall('member'):
+            if member.get('type') == 'relation' and member.get('ref') in relations_to_remove:
+                relations_to_remove.add(relation.get('id'))
+
+    # Removal process
+    for relation in root.findall('relation'):
+        if relation.get('id') in relations_to_remove:
+            root.remove(relation)
+    for way in root.findall('way'):
+        if way.get('id') in ways_to_remove:
+            root.remove(way)
+    for node in root.findall('node'):
+        if node.get('id') in nodes_to_remove:
+            root.remove(node)
+
+    # Save the modified XML to a new file
+    new_file_path = xml_path.replace('.osm', '_filtered.osm')
+    tree.write(new_file_path)
+    return new_file_path
+
+# Specify the path to your XML file and the subtypes to remove
+xml_file_path = 'path_to_your_file.osm'  # Adjust to your file location
+subtypes_list = ['road_marking', 'no_stopping_area']
+new_file = remove_elements(xml_file_path, subtypes_list)
+
+print("Filtered XML file saved as:", new_file)
