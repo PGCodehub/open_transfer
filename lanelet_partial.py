@@ -155,6 +155,20 @@ def remove_elements(xml_path, subtypes_to_remove):
 
 # Specify the path to your XML file and the subtypes to remove
 xml_file_path = 'path_to_your_file.osm'  # Adjust to your file location
+
+
+
+
+
+
+ # Second pass: Remove only the member elements that reference the relations to be deleted
+    for relation in root.findall('relation'):
+        members_to_remove = []
+        for member in relation.findall('member'):
+            if member.get('type') == 'relation' and member.get('ref') in relations_to_remove:
+                members_to_remove.append(member)
+        for member in members_to_remove:
+            relation.remove(member)
 subtypes_list = ['road_marking', 'no_stopping_area']
 new_file = remove_elements(xml_file_path, subtypes_list)
 
