@@ -173,3 +173,45 @@ subtypes_list = ['road_marking', 'no_stopping_area']
 new_file = remove_elements(xml_file_path, subtypes_list)
 
 print("Filtered XML file saved as:", new_file)
+
+
+#include <fstream>
+
+RoutingGraphUPtr RoutingGraphBuilder::build(const LaneletMapLayers& laneletMapLayers) {
+    std::ofstream debugFile("debug_output.txt", std::ios::out | std::ios::app); // Open a file in append mode
+
+    // Start by logging the input laneletMapLayers
+    debugFile << "Starting build with LaneletMapLayers details:" << std::endl;
+    // Example debug information, assuming you can get the size of layers or similar
+    debugFile << "Lanelets count: " << laneletMapLayers.laneletLayer.size() << std::endl;
+    debugFile << "Areas count: " << laneletMapLayers.areaLayer.size() << std::endl;
+
+    auto passableLanelets = getPassableLanelets(laneletMapLayers.laneletLayer, trafficRules_);
+    auto passableAreas = getPassableAreas(laneletMapLayers.areaLayer, trafficRules_);
+    auto passableMap = utils::createConstSubmap(passableLanelets, passableAreas);
+
+    // Log passableLanelets and passableAreas
+    debugFile << "Passable Lanelets:" << std::endl;
+    for (const auto& llt : passableLanelets) {
+        debugFile << "Lanelet ID: " << llt.id() << std::endl; // Assuming ConstLanelet has id() method
+    }
+
+    debugFile << "Passable Areas:" << std::endl;
+    for (const auto& area : passableAreas) {
+        debugFile << "Area ID: " << area.id() << std::endl; // Assuming ConstArea has id() method
+    }
+
+    appendBidirectionalLanelets(passableLanelets);
+    addLaneletsToGraph(passableLanelets);
+    addAreasToGraph(passableAreas);
+    addEdges(passableLanelets, passableMap->laneletLayer);
+    addEdges(passableAreas, passableMap->laneletLayer, passableMap->areaLayer);
+
+    // Optionally, log final passableMap details if needed
+    debugFile << "Final passableMap contains " << passableMap->laneletLayer.size() << " lanelets and "
+              << passableMap->areaLayer.size() << " areas." << std::endl;
+
+    debugFile.close(); // Close the file
+
+    return std::make_unique<RoutingGraph>(std::move(graph_), std::move(passableMap));
+}
