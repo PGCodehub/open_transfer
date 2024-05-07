@@ -110,6 +110,12 @@ def main():
 
     # Filter the XML file based on the provided IDs
     filtered_file = filter_xml_elements(args.xml_file, args.relation_ids)
+
+
+Add filter_xml_elements to selectively retain relations and dependencies in XML files
+- Allows filtering based on relation IDs via command-line arguments
+- Preserves related ways and nodes to maintain integrity of the XML structure
+
     print("Filtered XML file saved as:", filtered_file)
 
 if __name__ == "__main__":
