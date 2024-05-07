@@ -120,3 +120,33 @@ Add filter_xml_elements to selectively retain relations and dependencies in XML 
 
 if __name__ == "__main__":
     main()
+
+
+XML Filtering Tool
+This Python script provides a specialized tool for filtering XML files by selectively retaining specified "relation" elements and their associated "way" and "node" elements. It's designed to handle complex data structures where relationships are crucial, making it particularly useful for geographical data manipulation or similar tasks.
+
+Features
+Selective Filtering: Keep only specified relation elements and automatically retain their associated way and node elements.
+Command-Line Interface: Fully configurable via command line arguments for dynamic use in various workflows.
+Nested Relation Support: Handles nested relations by maintaining references between relation elements.
+Prerequisites
+Before running this script, ensure you have Python installed on your system. The script is compatible with Python 3.6 and above. You can download Python from python.org.
+
+Installation
+No additional installation is required. Simply clone this repository or download the script to your local machine.
+
+bash
+Copy code
+git clone https://your-repository-url.git
+cd path-to-script
+Usage
+To use this script, you need to provide the path to the XML file and the list of relation IDs to keep. Here is how you can run the script from the command line:
+
+bash
+Copy code
+python filter_xml.py path_to_your_file.osm 109 14 108 156 155
+Arguments
+xml_file: The path to the XML file to be processed.
+relation_ids: Space-separated list of relation IDs to keep in the resulting XML.
+Output
+The script will generate a new XML file with "_filtered" appended to the original filename, located in the same directory as the input file. This file will only contain the elements that are directly or indirectly associated with the specified relation IDs.
