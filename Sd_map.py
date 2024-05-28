@@ -7,6 +7,9 @@ osm_file_path = '/content/od_inter_map.osm'  # Replace with your OSM file path
 tree = ET.parse(osm_file_path)
 root = tree.getroot()
 
+# Add parameter for filtering way IDs
+way_ids_to_keep = ['59254388']  # Replace with your list of way IDs to keep
+
 nodes = []
 node_tags = {}
 ways_info = {}
@@ -37,6 +40,10 @@ for way in root.findall('way'):
             'nodes': way_nodes,
             'tags': filtered_tags
         }
+
+# Filter ways_info to keep only the specified way IDs
+if way_ids_to_keep:
+    ways_info = {way_id: info for way_id, info in ways_info.items() if way_id in way_ids_to_keep}
 
 # Filter nodes to include only those referenced by the filtered ways
 referenced_node_ids = {node_ref for way in ways_info.values() for node_ref in way['nodes']}
@@ -109,8 +116,6 @@ with open(output_file_path, 'w', encoding='utf-8') as f:
     f.write(xml_str)
 
 print(f"Transformed map written to {output_file_path}")
-
-
 
 
 import osmium as osm
@@ -236,18 +241,17 @@ def map_related_right_ways(related_ways, way_offsets):
 related_right_ways = map_related_right_ways(related_ways, way_offsets)
 
 # Function to add nodes, ways, and relations to the XML
-def add_ways_to_xml(related_ways, way_offsets, side, global_node_id, way_type):
+def add_ways_to_xml(related_ways, way_offsets, side, global_id_counter, way_type):
     node_id_map = {}  # Map to keep track of new node IDs
-    way_id_counter = 1
     way_id_map = {}  # Map to keep track of new way IDs for relations
 
     for way_id, way_data in related_ways.items():
         way_nodes = way_data[side]
         related_ways_nodes = way_data[f'related_{side}']
 
-        way_elem = ET.SubElement(root, "way", id=str(way_id_counter), visible='true', version='1')
-        way_id_map[way_id] = way_id_counter
-        way_id_counter += 1
+        way_elem = ET.SubElement(root, "way", id=str(global_id_counter), visible='true', version='1')
+        way_id_map[way_id] = global_id_counter
+        global_id_counter += 1
 
         # Add way tags
         ET.SubElement(way_elem, "tag", k='subtype', v='solid')
@@ -258,8 +262,8 @@ def add_ways_to_xml(related_ways, way_offsets, side, global_node_id, way_type):
         for lat, lon in way_nodes:
             node_id = node_id_map.get((lat, lon))
             if node_id is None:
-                node_id = global_node_id
-                global_node_id += 1
+                node_id = global_id_counter
+                global_id_counter += 1
                 node_id_map[(lat, lon)] = node_id
                 node_elem = ET.SubElement(root, "node", id=str(node_id), lat=str(lat), lon=str(lon), visible='true', version='1')
                 ET.SubElement(node_elem, "tag", k='ele', v='0')  # Default ele value
@@ -269,64 +273,52 @@ def add_ways_to_xml(related_ways, way_offsets, side, global_node_id, way_type):
 
         # Ensure related ways share common node references
         for related_nodes in related_ways_nodes:
-            start_node = related_nodes[0]
-            end_node = related_nodes[-1]
+            common_nodes = set(way_nodes) & set(related_nodes)
 
-            start_node_id = node_id_map.get(start_node)
-            if start_node_id is None:
-                start_node_id = global_node_id
-                global_node_id += 1
-                node_id_map[start_node] = start_node_id
-                node_elem = ET.SubElement(root, "node", id=str(start_node_id), lat=str(start_node[0]), lon=str(start_node[1]), visible='true', version='1')
-                ET.SubElement(node_elem, "tag", k='ele', v='0')  # Default ele value
-                mgrs_code = latlon_to_mgrs(start_node[0], start_node[1])
-                ET.SubElement(node_elem, "tag", k='mgrs_code', v=mgrs_code)
+            for lat, lon in common_nodes:
+                node_id = node_id_map.get((lat, lon))
+                if node_id is None:
+                    node_id = global_id_counter
+                    global_id_counter += 1
+                    node_id_map[(lat, lon)] = node_id
+                    node_elem = ET.SubElement(root, "node", id=str(node_id), lat=str(lat), lon=str(lon), visible='true', version='1')
+                    ET.SubElement(node_elem, "tag", k='ele', v='0')  # Default ele value
+                    mgrs_code = latlon_to_mgrs(lat, lon)
+                    ET.SubElement(node_elem, "tag", k='mgrs_code', v=mgrs_code)
+                ET.SubElement(way_elem, "nd", ref=str(node_id))
 
-            end_node_id = node_id_map.get(end_node)
-            if end_node_id is None:
-                end_node_id = global_node_id
-                global_node_id += 1
-                node_id_map[end_node] = end_node_id
-                node_elem = ET.SubElement(root, "node", id=str(end_node_id), lat=str(end_node[0]), lon=str(end_node[1]), visible='true', version='1')
-                ET.SubElement(node_elem, "tag", k='ele', v='0')  # Default ele value
-                mgrs_code = latlon_to_mgrs(end_node[0], end_node[1])
-                ET.SubElement(node_elem, "tag", k='mgrs_code', v=mgrs_code)
-
-            # Add the common node to the related way
-            related_way_elem = ET.SubElement(root, "way", id=str(way_id_counter), visible='true', version='1')
-            way_id_counter += 1
+            related_way_elem = ET.SubElement(root, "way", id=str(global_id_counter), visible='true', version='1')
+            global_id_counter += 1
             ET.SubElement(related_way_elem, "tag", k='subtype', v='solid')
             ET.SubElement(related_way_elem, "tag", k='type', v='line_thin')
             ET.SubElement(related_way_elem, "tag", k='width', v='0.200')
-            ET.SubElement(related_way_elem, "nd", ref=str(start_node_id))
-            for lat, lon in related_nodes[1:-1]:
+            for lat, lon in related_nodes:
                 node_id = node_id_map.get((lat, lon))
                 if node_id is None:
-                    node_id = global_node_id
-                    global_node_id += 1
+                    node_id = global_id_counter
+                    global_id_counter += 1
                     node_id_map[(lat, lon)] = node_id
                     node_elem = ET.SubElement(root, "node", id=str(node_id), lat=str(lat), lon=str(lon), visible='true', version='1')
                     ET.SubElement(node_elem, "tag", k='ele', v='0')  # Default ele value
                     mgrs_code = latlon_to_mgrs(lat, lon)
                     ET.SubElement(node_elem, "tag", k='mgrs_code', v=mgrs_code)
                 ET.SubElement(related_way_elem, "nd", ref=str(node_id))
-            ET.SubElement(related_way_elem, "nd", ref=str(end_node_id))
 
-    return global_node_id, way_id_map
+    return global_id_counter, way_id_map
 
 # Initialize the new XML structure
 root = ET.Element("osm", version="0.6")
-global_node_id = 1  # Global node ID counter
+global_id_counter = 1000000  # Global ID counter starting from a high number to avoid conflicts
 
 # Add left ways and nodes to the new XML
-global_node_id, left_way_id_map = add_ways_to_xml(related_left_ways, way_offsets, 'left', global_node_id, 'left')
+global_id_counter, left_way_id_map = add_ways_to_xml(related_left_ways, way_offsets, 'left', global_id_counter, 'left')
 
 # Add right ways and nodes to the new XML
-global_node_id, right_way_id_map = add_ways_to_xml(related_right_ways, way_offsets, 'right', global_node_id, 'right')
+global_id_counter, right_way_id_map = add_ways_to_xml(related_right_ways, way_offsets, 'right', global_id_counter, 'right')
 
 # Function to add relations to the XML
-def add_relations_to_xml(left_way_id_map, right_way_id_map):
-    relation_id_counter = 1
+def add_relations_to_xml(left_way_id_map, right_way_id_map, global_id_counter):
+    relation_id_counter = global_id_counter
 
     for way_id in left_way_id_map.keys():
         relation_elem = ET.SubElement(root, "relation", id=str(relation_id_counter), visible='true', version='1')
@@ -341,8 +333,10 @@ def add_relations_to_xml(left_way_id_map, right_way_id_map):
         ET.SubElement(relation_elem, "tag", k='subtype', v='road')
         ET.SubElement(relation_elem, "tag", k='type', v='lanelet')
 
+    return relation_id_counter
+
 # Add relations to the XML
-add_relations_to_xml(left_way_id_map, right_way_id_map)
+global_id_counter = add_relations_to_xml(left_way_id_map, right_way_id_map, global_id_counter)
 
 # Pretty print and save the XML as a .osm file
 tree = ET.ElementTree(root)
